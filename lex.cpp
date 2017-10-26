@@ -8,22 +8,22 @@ lex::lex(std::string s)
 {
 }
 
-token lex::next_token()
+std::string lex::next_token()
 {
   if (lookahead)
   {
-    auto t = std::move(*lookahead);
+    auto t = std::move(lookahead);
     drop();
-    return t;
+    std::rethrow_exception(t);
   }
   return scan_token();
 }
 
-token lex::scan_token()
+std::string lex::scan_token()
 {
   for (;;)
   {
-    if (iter == end) return {eof{}};
+    if (iter == end) throw eof{};
     if (*iter != ' ' && *iter != '\t' && *iter != '\n')
       break;
     ++iter;
@@ -34,51 +34,58 @@ token lex::scan_token()
   }
   switch (*iter)
   {
-    case '(': ++iter;return {C<'('>{}};
-    case ')': ++iter;return {C<')'>{}};
-    case '/': ++iter;return {C<'/'>{}};
-    case '*': ++iter;return {C<'*'>{}};
-    case '=': ++iter;return {C<'='>{}};
-    case '+': ++iter;return {C<'+'>{}};
-    case '-': ++iter;return {C<'-'>{}};
+    case '(': ++iter;throw C<'('>{};
+    case ')': ++iter;throw C<')'>{};
+    case '/': ++iter;throw C<'/'>{};
+    case '*': ++iter;throw C<'*'>{};
+    case '=': ++iter;throw C<'='>{};
+    case '+': ++iter;throw C<'+'>{};
+    case '-': ++iter;throw C<'-'>{};
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9': case '.':
       return scan_number();
   }
-  throw "unknown";
+  return "unknown";
 }
 
-token lex::scan_id_or_keyword()
+std::string lex::scan_id_or_keyword()
 {
   auto start = iter++;
   while (iter != end && (std::isalnum(*iter) || *iter == '_'))
     ++iter;
-  std::string_view s{start, size_t(iter - start)};
-  if (s == "remember") return token{remember{}};
-  if (s == "forget") return token{forget{}};
-  return token{ident{std::move(s)}};
+  std::string s{start, iter};
+  if (s == "remember") throw remember{};
+  if (s == "forget") throw forget{};
+  throw ident{std::move(s)};
 }
 
-token lex::scan_number()
+std::string lex::scan_number()
 {
   char* number_end;
 
   number rv;
   rv.value = std::strtod(iter, &number_end);
   iter = number_end;
-  return {rv};
+  throw rv;
 }
 
-token lex::peek()
+std::string lex::peek()
 {
   if (!lookahead)
   {
-    lookahead = scan_token();
+    try
+    {
+      return scan_token();
+    }
+    catch (...)
+    {
+      lookahead = std::current_exception();
+    }
   }
-  return *lookahead;
+  std::rethrow_exception(lookahead);
 }
 
 void lex::drop()
 {
-  lookahead = std::nullopt;
+  lookahead = nullptr;
 }
